@@ -14,16 +14,20 @@ import {
   SmartToy as BotIcon,
   Person as PersonIcon,
   Stop as StopIcon,
-  Psychology as ThinkingIcon
+  Psychology as ThinkingIcon,
+  AttachFile as AttachFileIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 
 export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const readerRef = useRef(null);
   const userScrolledRef = useRef(false);
   const lastScrollTopRef = useRef(0);
@@ -59,6 +63,15 @@ export default function ChatApp() {
     lastScrollTopRef.current = scrollTop;
   };
 
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    setSelectedFiles(prev => [...prev, ...files]);
+  };
+
+  const removeFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const stopGeneration = () => {
     if (readerRef.current) {
       readerRef.current.cancel();
@@ -69,13 +82,19 @@ export default function ChatApp() {
   };
 
   const handleSubmit = async () => {
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && selectedFiles.length === 0) || isLoading) return;
 
     const userMessage = input.trim();
+    const files = selectedFiles;
     setInput('');
+    setSelectedFiles([]);
     userScrolledRef.current = false; // Reset scroll lock on new message
     
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setMessages(prev => [...prev, { 
+      role: 'user', 
+      content: userMessage,
+      files: files.map(f => ({ name: f.name, size: f.size }))
+    }]);
     setIsLoading(true);
 
     const assistantMessageIndex = messages.length + 1;
@@ -88,12 +107,15 @@ export default function ChatApp() {
     }]);
 
     try {
+      const formData = new FormData();
+      formData.append('message', userMessage);
+      files.forEach(file => {
+        formData.append('files', file);
+      });
+
       const response = await fetch('http://localhost:8000/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: userMessage }),
+        body: formData,
       });
 
       if (!response.ok) {
@@ -309,6 +331,32 @@ export default function ChatApp() {
                   </Avatar>
                   
                   <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
+                    {/* User files display */}
+                    {msg.files && msg.files.length > 0 && (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                        {msg.files.map((file, fileIdx) => (
+                          <Box
+                            key={fileIdx}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                              bgcolor: '#2f2f2f',
+                              borderRadius: '16px',
+                              px: 2,
+                              py: 1,
+                              border: '1px solid #424242'
+                            }}
+                          >
+                            <AttachFileIcon sx={{ fontSize: 14, color: '#19c37d' }} />
+                            <Typography variant="body2" sx={{ color: '#ececec', fontSize: '12px' }}>
+                              {file.name}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
+
                     {/* Thinking Section - Only shown until answer starts */}
                     <Collapse in={msg.showThinking} timeout={300}>
                       <Paper
@@ -491,6 +539,50 @@ export default function ChatApp() {
         }}
       >
         <Box sx={{ maxWidth: '768px', mx: 'auto', width: '100%', px: 4 }}>
+          {/* File preview chips */}
+          {selectedFiles.length > 0 && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+              {selectedFiles.map((file, index) => (
+                <Box
+                  key={index}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    bgcolor: '#2f2f2f',
+                    borderRadius: '16px',
+                    px: 2,
+                    py: 1,
+                    border: '1px solid #424242'
+                  }}
+                >
+                  <AttachFileIcon sx={{ fontSize: 16, color: '#19c37d' }} />
+                  <Typography variant="body2" sx={{ color: '#ececec', fontSize: '13px' }}>
+                    {file.name}
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={() => removeFile(index)}
+                    sx={{ 
+                      width: 20, 
+                      height: 20,
+                      minWidth: 20,
+                      minHeight: 20,
+                      padding: 0,
+                      color: '#8e8e8e',
+                      '&:hover': { 
+                        color: '#ececec',
+                        bgcolor: 'transparent'
+                      }
+                    }}
+                  >
+                    <CloseIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Box>
+              ))}
+            </Box>
+          )}
+
           <Box 
             sx={{ 
               display: 'flex', 
@@ -508,6 +600,37 @@ export default function ChatApp() {
               }
             }}
           >
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+              accept="image/*,.pdf,.doc,.docx,.txt"
+            />
+            
+            {/* File upload button */}
+            <IconButton
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+              sx={{
+                color: '#8e8e8e',
+                width: 32,
+                height: 32,
+                '&:hover': {
+                  color: '#ececec',
+                  bgcolor: 'transparent'
+                },
+                '&.Mui-disabled': {
+                  color: '#4e4e4e'
+                },
+                flexShrink: 0
+              }}
+            >
+              <AttachFileIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+
             <TextField
               inputRef={inputRef}
               fullWidth
@@ -556,14 +679,14 @@ export default function ChatApp() {
             ) : (
               <IconButton
                 onClick={handleSubmit}
-                disabled={!input.trim()}
+                disabled={!input.trim() && selectedFiles.length === 0}
                 sx={{
-                  bgcolor: input.trim() ? '#ececec' : 'transparent',
-                  color: input.trim() ? '#212121' : '#676767',
+                  bgcolor: (input.trim() || selectedFiles.length > 0) ? '#ececec' : 'transparent',
+                  color: (input.trim() || selectedFiles.length > 0) ? '#212121' : '#676767',
                   width: 32,
                   height: 32,
                   '&:hover': {
-                    bgcolor: input.trim() ? '#d0d0d0' : 'transparent'
+                    bgcolor: (input.trim() || selectedFiles.length > 0) ? '#d0d0d0' : 'transparent'
                   },
                   '&.Mui-disabled': {
                     bgcolor: 'transparent',
@@ -587,7 +710,6 @@ export default function ChatApp() {
               fontSize: '12px'
             }}
           >
-            ChatGPT can make mistakes. Check important info.
           </Typography>
         </Box>
       </Box>

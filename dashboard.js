@@ -230,16 +230,20 @@ const CPGDashboard = () => {
       }));
   }, [filteredData]);
 
-  const COLORS = ['#1976d2', '#dc004e', '#f57c00', '#388e3c', '#7b1fa2', '#0097a7'];
+  const COLORS = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
 
   return (
-    <Box sx={{ bgcolor: '#f5f7fa', minHeight: '100vh', pb: 4 }}>
+    <Box sx={{ 
+      background: 'rgba(18, 37, 58, 0.87)',
+      minHeight: '100vh', 
+      pb: 4 
+    }}>
       {/* Header */}
-      <Box sx={{ bgcolor: 'white', borderBottom: '1px solid #e0e0e0', mb: 3 }}>
+      <Box sx={{ bgcolor: 'rgba(255, 255, 255, 0.95)', borderBottom: '1px solid rgba(255,255,255,0.2)', mb: 3, backdropFilter: 'blur(10px)' }}>
         <Container maxWidth="xl" sx={{ py: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Assessment sx={{ fontSize: 48, color: '#1976d2' }} />
+              <Assessment sx={{ fontSize: 48, color: '#667eea' }} />
               <Box>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b' }}>
                   CPG Demand Forecasting
@@ -254,7 +258,13 @@ const CPGDashboard = () => {
               component="label"
               startIcon={<CloudUpload />}
               size="large"
-              sx={{ px: 4 }}
+              sx={{ 
+                px: 4,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #5568d3 0%, #653a8b 100%)',
+                }
+              }}
             >
               Upload CSV Data
               <input type="file" hidden accept=".csv" onChange={handleFileUpload} />
@@ -266,7 +276,7 @@ const CPGDashboard = () => {
       {!csvData ? (
         // Upload Prompt
         <Container maxWidth="md" sx={{ mt: 10 }}>
-          <Paper elevation={3} sx={{ p: 8, textAlign: 'center', borderRadius: 3 }}>
+          <Paper elevation={3} sx={{ p: 8, textAlign: 'center', borderRadius: 3, bgcolor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)' }}>
             <CloudUpload sx={{ fontSize: 120, color: '#bdbdbd', mb: 3 }} />
             <Typography variant="h4" sx={{ fontWeight: 600, mb: 2 }}>
               Upload Your CPG Data
@@ -281,6 +291,12 @@ const CPGDashboard = () => {
               component="label"
               size="large"
               startIcon={<CloudUpload />}
+              sx={{ 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #5568d3 0%, #653a8b 100%)',
+                }
+              }}
             >
               Choose CSV File
               <input type="file" hidden accept=".csv" onChange={handleFileUpload} />
@@ -288,9 +304,9 @@ const CPGDashboard = () => {
           </Paper>
         </Container>
       ) : (
-        <Container maxWidth="xl">
+        <Container maxWidth={false} sx={{ width: "100%", px: 4 }}>
           {/* Filters */}
-          <Paper elevation={0} sx={{ p: 2, mb: 3 }}>
+          <Paper elevation={2} sx={{ p: 2, mb: 3, bgcolor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth size="small">
@@ -325,8 +341,11 @@ const CPGDashboard = () => {
               <Grid item xs={12} md={4}>
                 <Chip 
                   label={`${filteredData.length} Records Loaded`} 
-                  color="primary" 
-                  sx={{ fontWeight: 600 }}
+                  sx={{ 
+                    fontWeight: 600,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white'
+                  }}
                 />
               </Grid>
             </Grid>
@@ -336,12 +355,21 @@ const CPGDashboard = () => {
           {metrics && (
             <Grid container spacing={3} sx={{ mb: 3 }}>
               <Grid item xs={12} sm={6} md={3}>
-                <Card elevation={0} sx={{ bgcolor: '#e3f2fd', borderLeft: '4px solid #1976d2' }}>
-                  <CardContent>
-                    <Typography color="textSecondary" variant="body2" gutterBottom>
+                <Card elevation={3} sx={{ 
+                  bgcolor: 'rgba(255, 255, 255, 0.95)', 
+                  borderRadius: 3,
+                  height: 180,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  borderTop: '4px solid #667eea',
+                  backdropFilter: 'blur(10px)'
+                }}>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography color="textSecondary" variant="body2" gutterBottom sx={{ fontWeight: 500 }}>
                       Forecast Sales
                     </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1976d2' }}>
+                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#667eea', my: 1 }}>
                       {metrics.totalForecast.toLocaleString()}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
@@ -351,12 +379,21 @@ const CPGDashboard = () => {
                 </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
-                <Card elevation={0} sx={{ bgcolor: '#e8f5e9', borderLeft: '4px solid #388e3c' }}>
-                  <CardContent>
-                    <Typography color="textSecondary" variant="body2" gutterBottom>
+                <Card elevation={3} sx={{ 
+                  bgcolor: 'rgba(255, 255, 255, 0.95)', 
+                  borderRadius: 3,
+                  height: 180,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  borderTop: '4px solid #764ba2',
+                  backdropFilter: 'blur(10px)'
+                }}>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography color="textSecondary" variant="body2" gutterBottom sx={{ fontWeight: 500 }}>
                       Actual Sales
                     </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#388e3c' }}>
+                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#764ba2', my: 1 }}>
                       {metrics.totalActual.toLocaleString()}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
@@ -366,12 +403,21 @@ const CPGDashboard = () => {
                 </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
-                <Card elevation={0} sx={{ bgcolor: '#fff3e0', borderLeft: '4px solid #f57c00' }}>
-                  <CardContent>
-                    <Typography color="textSecondary" variant="body2" gutterBottom>
+                <Card elevation={3} sx={{ 
+                  bgcolor: 'rgba(255, 255, 255, 0.95)', 
+                  borderRadius: 3,
+                  height: 180,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  borderTop: '4px solid #f093fb',
+                  backdropFilter: 'blur(10px)'
+                }}>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography color="textSecondary" variant="body2" gutterBottom sx={{ fontWeight: 500 }}>
                       Forecast Accuracy
                     </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#f57c00' }}>
+                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#f093fb', my: 1 }}>
                       {metrics.accuracy}%
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
@@ -381,12 +427,21 @@ const CPGDashboard = () => {
                 </Card>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
-                <Card elevation={0} sx={{ bgcolor: '#ffebee', borderLeft: '4px solid #dc004e' }}>
-                  <CardContent>
-                    <Typography color="textSecondary" variant="body2" gutterBottom>
+                <Card elevation={3} sx={{ 
+                  bgcolor: 'rgba(255, 255, 255, 0.95)', 
+                  borderRadius: 3,
+                  height: 180,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  borderTop: '4px solid #f5576c',
+                  backdropFilter: 'blur(10px)'
+                }}>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography color="textSecondary" variant="body2" gutterBottom sx={{ fontWeight: 500 }}>
                       Low Stock Alerts
                     </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#dc004e' }}>
+                    <Typography variant="h3" sx={{ fontWeight: 700, color: '#f5576c', my: 1 }}>
                       {metrics.lowStockItems}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
@@ -402,7 +457,7 @@ const CPGDashboard = () => {
           <Grid container spacing={3}>
             {/* Forecast vs Actual Trend */}
             <Grid item xs={12} lg={8}>
-              <Paper elevation={2} sx={{ p: 3 }}>
+              <Paper elevation={2} sx={{ p: 5, bgcolor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
                 <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                   Forecast vs Actual Sales Trend
                 </Typography>
@@ -416,18 +471,18 @@ const CPGDashboard = () => {
                     <Area 
                       type="monotone" 
                       dataKey="forecast" 
-                      fill="#1976d2" 
+                      fill="#667eea" 
                       fillOpacity={0.3}
-                      stroke="#1976d2"
+                      stroke="#667eea"
                       name="Forecast Sales"
                     />
                     <Line 
                       type="monotone" 
                       dataKey="actual" 
-                      stroke="#388e3c" 
+                      stroke="#764ba2" 
                       strokeWidth={3}
                       name="Actual Sales"
-                      dot={{ fill: '#388e3c', r: 5 }}
+                      dot={{ fill: '#764ba2', r: 5 }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -436,11 +491,11 @@ const CPGDashboard = () => {
 
             {/* Category Distribution */}
             <Grid item xs={12} lg={4}>
-              <Paper elevation={2} sx={{ p: 3 }}>
+              <Paper elevation={2} sx={{ p: 10, bgcolor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
                 <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                   Sales by Category
                 </Typography>
-                <ResponsiveContainer width="100%" height={350}>
+                <ResponsiveContainer width={550} height={250}>
                   <PieChart>
                     <Pie
                       data={categoryPerformance}
@@ -463,7 +518,7 @@ const CPGDashboard = () => {
 
             {/* Store Performance */}
             <Grid item xs={12} lg={6}>
-              <Paper elevation={2} sx={{ p: 3 }}>
+              <Paper elevation={2} sx={{ p: 5, bgcolor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
                 <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                   Store Performance Comparison
                 </Typography>
@@ -474,8 +529,8 @@ const CPGDashboard = () => {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="forecast" fill="#1976d2" name="Forecast" />
-                    <Bar dataKey="sales" fill="#388e3c" name="Actual Sales" />
+                    <Bar dataKey="forecast" fill="#667eea" name="Forecast" />
+                    <Bar dataKey="sales" fill="#764ba2" name="Actual Sales" />
                   </BarChart>
                 </ResponsiveContainer>
               </Paper>
@@ -483,7 +538,7 @@ const CPGDashboard = () => {
 
             {/* Forecast Accuracy Scatter */}
             <Grid item xs={12} lg={6}>
-              <Paper elevation={2} sx={{ p: 3 }}>
+              <Paper elevation={2} sx={{ p: 5, bgcolor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
                 <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                   Forecast Accuracy Analysis
                 </Typography>
@@ -494,7 +549,7 @@ const CPGDashboard = () => {
                     <YAxis dataKey="actual" name="Actual" />
                     <Tooltip cursor={{ strokeDasharray: '3 3' }} />
                     <Legend />
-                    <Scatter name="Products" data={forecastAccuracyData} fill="#7b1fa2" />
+                    <Scatter name="Products" data={forecastAccuracyData} fill="#f093fb" />
                   </ScatterChart>
                 </ResponsiveContainer>
               </Paper>
@@ -502,7 +557,7 @@ const CPGDashboard = () => {
 
             {/* Stock Movement */}
             <Grid item xs={12}>
-              <Paper elevation={2} sx={{ p: 3 }}>
+              <Paper elevation={2} sx={{ p: 5, bgcolor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
                 <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                   Stock Movement Analysis
                 </Typography>
@@ -513,10 +568,10 @@ const CPGDashboard = () => {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="opening" stroke="#1976d2" name="Opening Stock" />
-                    <Line type="monotone" dataKey="closing" stroke="#388e3c" name="Closing Stock" />
-                    <Line type="monotone" dataKey="received" stroke="#f57c00" name="Received" />
-                    <Line type="monotone" dataKey="sold" stroke="#dc004e" name="Sold" />
+                    <Line type="monotone" dataKey="opening" stroke="#667eea" name="Opening Stock" />
+                    <Line type="monotone" dataKey="closing" stroke="#764ba2" name="Closing Stock" />
+                    <Line type="monotone" dataKey="received" stroke="#f093fb" name="Received" />
+                    <Line type="monotone" dataKey="sold" stroke="#f5576c" name="Sold" />
                   </LineChart>
                 </ResponsiveContainer>
               </Paper>
@@ -525,9 +580,9 @@ const CPGDashboard = () => {
             {/* Low Stock Alerts */}
             {lowStockAlerts.length > 0 && (
               <Grid item xs={12}>
-                <Paper elevation={2} sx={{ p: 3 }}>
+                <Paper elevation={2} sx={{ p: 3, bgcolor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Warning sx={{ color: '#dc004e', mr: 1 }} />
+                    <Warning sx={{ color: '#f5576c', mr: 1 }} />
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                       Low Stock Alerts
                     </Typography>
@@ -553,15 +608,18 @@ const CPGDashboard = () => {
                             <TableCell>{item.StoreName}</TableCell>
                             <TableCell align="right">{item.ClosingStock}</TableCell>
                             <TableCell align="right">{item.ReorderLevel}</TableCell>
-                            <TableCell align="right" sx={{ color: '#dc004e', fontWeight: 600 }}>
+                            <TableCell align="right" sx={{ color: '#f5576c', fontWeight: 600 }}>
                               {item.deficit}
                             </TableCell>
                             <TableCell>
                               <Chip 
                                 label="REORDER" 
                                 size="small" 
-                                color="error"
-                                sx={{ fontWeight: 600 }}
+                                sx={{ 
+                                  fontWeight: 600,
+                                  bgcolor: '#f5576c',
+                                  color: 'white'
+                                }}
                               />
                             </TableCell>
                           </TableRow>

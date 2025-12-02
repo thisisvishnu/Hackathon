@@ -111,9 +111,9 @@ const [success, setSuccess] = useState('');
 
 const API_BASE = 'http://localhost:8000/api';
 
-const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-const handleLogin = async (e: React.FormEvent) => {
+const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -156,7 +156,7 @@ const handleLogin = async (e: React.FormEvent) => {
     }
 };
 
-const handleSignup = async (e: React.FormEvent) => {
+const handleSignup = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');

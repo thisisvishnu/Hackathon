@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import ChatBot from './chatbot';
 import {
   Box,
   Container,
@@ -19,14 +20,16 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import {
   CloudUpload,
   TrendingUp,
   Warning,
   Inventory,
-  Assessment
+  Assessment,
+  SmartToy as BotIcon,
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -49,18 +52,40 @@ import {
   Scatter
 } from 'recharts';
 
-const CPGDashboard = () => {
+const CPGDashboard = ({ onLogout, onNavigateToChatBot }) => {
   const [csvData, setCsvData] = useState(null);
   const [selectedStore, setSelectedStore] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
+    setLoading(true);
+    setError('');
+
     try {
-      const text = await file.text();
-      const lines = text.trim().split('\n');
+      // Create FormData to send file to backend
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Send to backend
+      const response = await fetch('http://localhost:8001/api/process-csv', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process CSV');
+      }
+
+      // Get the processed CSV from backend
+      const processedCsvText = await response.text();
+
+      // Parse the processed CSV
+      const lines = processedCsvText.trim().split('\n');
       const headers = lines[0].split(',').map(h => h.trim());
       
       const data = lines.slice(1).map(line => {
@@ -74,7 +99,10 @@ const CPGDashboard = () => {
       
       setCsvData(data);
     } catch (error) {
-      console.error('Error parsing CSV:', error);
+      console.error('Error processing CSV:', error);
+      setError('Failed to process CSV. Please check if backend is running.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -258,6 +286,7 @@ const CPGDashboard = () => {
               component="label"
               startIcon={<CloudUpload />}
               size="large"
+              disabled={loading}
               sx={{ 
                 px: 4,
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -266,14 +295,26 @@ const CPGDashboard = () => {
                 }
               }}
             >
-              Upload CSV Data
-              <input type="file" hidden accept=".csv" onChange={handleFileUpload} />
+              {loading ? 'Processing...' : 'Upload CSV Data'}
+              <input type="file" hidden accept=".csv" onChange={handleFileUpload} disabled={loading} />
             </Button>
           </Box>
         </Container>
       </Box>
 
-      {!csvData ? (
+      {loading ? (
+        <Container maxWidth="md" sx={{ mt: 10, textAlign: 'center' }}>
+          <Paper elevation={3} sx={{ p: 8, borderRadius: 3, bgcolor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)' }}>
+            <CircularProgress size={80} sx={{ mb: 3 }} />
+            <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
+              Processing Your Data
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Please wait while we analyze your CSV file...
+            </Typography>
+          </Paper>
+        </Container>
+      ) : !csvData ? (
         // Upload Prompt
         <Container maxWidth="md" sx={{ mt: 10 }}>
           <Paper elevation={3} sx={{ p: 8, textAlign: 'center', borderRadius: 3, bgcolor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)' }}>
@@ -286,6 +327,11 @@ const CPGDashboard = () => {
               Category, Supplier, UnitPrice, UnitCost, OpeningStock, ReceivedQty, SoldQty, 
               ClosingStock, ForecastSales, ActualSales, ForecastError, ReorderLevel
             </Typography>
+            {error && (
+              <Alert severity="error" sx={{ mb: 3 }}>
+                {error}
+              </Alert>
+            )}
             <Button
               variant="contained"
               component="label"
@@ -338,7 +384,7 @@ const CPGDashboard = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={2}>
                 <Chip 
                   label={`${filteredData.length} Records Loaded`} 
                   sx={{ 
@@ -347,6 +393,24 @@ const CPGDashboard = () => {
                     color: 'white'
                   }}
                 />
+              </Grid>
+              
+              <Grid item xs={12} md={2}>
+                <Button
+                  variant="contained"
+                  startIcon={<BotIcon />}
+                  fullWidth
+                  disabled={loading}
+                  onClick={onNavigateToChatBot}
+                  sx={{ 
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #5568d3 0%, #653a8b 100%)',
+                    }
+                  }}
+                >
+                  ChatBot
+                </Button>
               </Grid>
             </Grid>
           </Paper>

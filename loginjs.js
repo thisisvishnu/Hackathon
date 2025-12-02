@@ -99,7 +99,7 @@ components: {
 },
 });
 
-export default function EnterpriseLoginPage() {
+export default function EnterpriseLoginPage({ onLoginSuccess }) {
 const [tab, setTab] = useState(0);
 const [email, setEmail] = useState('');
 const [password, setPassword] = useState('');
@@ -138,15 +138,19 @@ const handleLogin = async (e) => {
 
     const data = await response.json();
 
+
+    
+
+
     if (response.ok) {
-        setSuccess('Login successful! Redirecting...');
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user_id', data.user_id);
-        localStorage.setItem('email', data.email);
-        setTimeout(() => {
-        window.location.href = '/home';
-        }, 1500);
-    } else {
+    setSuccess('Login successful! Redirecting...');
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user_id', data.user_id);
+    localStorage.setItem('email', data.email);
+    setTimeout(() => {
+        onLoginSuccess(); 
+    }, 1500);
+} else {
         setError(data.detail || data.message || 'Invalid credentials');
     }
     } catch (err) {

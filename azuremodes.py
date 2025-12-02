@@ -25,7 +25,7 @@ http_client = httpx.Client(verify=False)
 async_http_client = httpx.AsyncClient(verify=False)
 
 # Set your Azure OpenAI credentials
-os.environ["AZURE_OPENAI_API_KEY"] = "///"
+os.environ["AZURE_OPENAI_API_KEY"] = "sk-KVetPf7B85zhUGicPW8mrQ"
 os.environ["AZURE_OPENAI_ENDPOINT"] = "https://genailab.tcs.in"
 
 # Disable SSL warnings
@@ -81,6 +81,7 @@ llm = AzureChatOpenAI(
     api_version="2024-02-15-preview",
     temperature=0.7,
     max_tokens=4096,
+    streaming=True,
     http_client=http_client,
     http_async_client=async_http_client
 )

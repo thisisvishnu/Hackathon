@@ -7,7 +7,15 @@ import {
   Avatar,
   Fade,
   Paper,
-  Collapse
+  Collapse,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  Divider,
+  Menu,
+  MenuItem
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -16,14 +24,28 @@ import {
   Stop as StopIcon,
   Psychology as ThinkingIcon,
   AttachFile as AttachFileIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  Menu as MenuIcon,
+  Add as AddIcon,
+  MoreVert as MoreVertIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 
 export default function ChatApp() {
-  const [messages, setMessages] = useState([]);
+  const [conversations, setConversations] = useState([
+    { id: '1', title: 'New Chat', messages: [], createdAt: new Date() }
+  ]);
+  const [currentConversationId, setCurrentConversationId] = useState('1');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [menuAnchor, setMenuAnchor] = useState(null);
+  const [selectedConvId, setSelectedConvId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
@@ -31,6 +53,9 @@ export default function ChatApp() {
   const readerRef = useRef(null);
   const userScrolledRef = useRef(false);
   const lastScrollTopRef = useRef(0);
+
+  const currentConversation = conversations.find(c => c.id === currentConversationId);
+  const messages = currentConversation?.messages || [];
 
   const scrollToBottom = () => {
     if (!userScrolledRef.current) {
@@ -42,7 +67,6 @@ export default function ChatApp() {
     scrollToBottom();
   }, [messages]);
 
-  // Detect user scroll
   const handleScroll = (e) => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -50,17 +74,78 @@ export default function ChatApp() {
     const { scrollTop, scrollHeight, clientHeight } = container;
     const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50;
     
-    // If user scrolls up, stop auto-scroll
     if (scrollTop < lastScrollTopRef.current && !isAtBottom) {
       userScrolledRef.current = true;
     }
     
-    // If user scrolls to bottom, resume auto-scroll
     if (isAtBottom) {
       userScrolledRef.current = false;
     }
     
     lastScrollTopRef.current = scrollTop;
+  };
+
+  const createNewChat = () => {
+    const newConv = {
+      id: Date.now().toString(),
+      title: 'New Chat',
+      messages: [],
+      createdAt: new Date()
+    };
+    setConversations(prev => [newConv, ...prev]);
+    setCurrentConversationId(newConv.id);
+  };
+
+  const deleteConversation = (id) => {
+    setConversations(prev => prev.filter(c => c.id !== id));
+    if (currentConversationId === id) {
+      const remaining = conversations.filter(c => c.id !== id);
+      if (remaining.length > 0) {
+        setCurrentConversationId(remaining[0].id);
+      } else {
+        createNewChat();
+      }
+    }
+    handleMenuClose();
+  };
+
+  const startEditTitle = (conv) => {
+    setEditingId(conv.id);
+    setEditTitle(conv.title);
+    handleMenuClose();
+  };
+
+  const saveTitle = (id) => {
+    if (editTitle.trim()) {
+      setConversations(prev => 
+        prev.map(c => c.id === id ? { ...c, title: editTitle.trim() } : c)
+      );
+    }
+    setEditingId(null);
+  };
+
+  const handleMenuOpen = (e, convId) => {
+    e.stopPropagation();
+    setMenuAnchor(e.currentTarget);
+    setSelectedConvId(convId);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchor(null);
+    setSelectedConvId(null);
+  };
+
+  const updateConversationTitle = (convId, firstMessage) => {
+    const title = firstMessage.length > 30 
+      ? firstMessage.substring(0, 30) + '...' 
+      : firstMessage;
+    
+    setConversations(prev => 
+      prev.map(c => c.id === convId && c.title === 'New Chat' 
+        ? { ...c, title } 
+        : c
+      )
+    );
   };
 
   const handleFileSelect = (e) => {
@@ -88,23 +173,42 @@ export default function ChatApp() {
     const files = selectedFiles;
     setInput('');
     setSelectedFiles([]);
-    userScrolledRef.current = false; // Reset scroll lock on new message
+    userScrolledRef.current = false;
     
-    setMessages(prev => [...prev, { 
+    // Update conversation title if it's the first message
+    if (messages.length === 0 && userMessage) {
+      updateConversationTitle(currentConversationId, userMessage);
+    }
+
+    const newUserMessage = { 
       role: 'user', 
       content: userMessage,
       files: files.map(f => ({ name: f.name, size: f.size }))
-    }]);
+    };
+
+    setConversations(prev => 
+      prev.map(c => c.id === currentConversationId 
+        ? { ...c, messages: [...c.messages, newUserMessage] }
+        : c
+      )
+    );
     setIsLoading(true);
 
     const assistantMessageIndex = messages.length + 1;
-    setMessages(prev => [...prev, { 
+    const newAssistantMessage = { 
       role: 'assistant', 
       content: '',
       thinking: '',
       isThinking: false,
       showThinking: false
-    }]);
+    };
+
+    setConversations(prev => 
+      prev.map(c => c.id === currentConversationId 
+        ? { ...c, messages: [...c.messages, newAssistantMessage] }
+        : c
+      )
+    );
 
     try {
       const formData = new FormData();
@@ -140,62 +244,46 @@ export default function ChatApp() {
             try {
               const data = JSON.parse(line.slice(6));
               
-              if (data.type === 'thinking_start') {
-                setMessages(prev => {
-                  const newMessages = [...prev];
-                  newMessages[assistantMessageIndex] = {
-                    ...newMessages[assistantMessageIndex],
-                    isThinking: true,
-                    showThinking: true,
-                    thinking: ''
-                  };
-                  return newMessages;
-                });
-              }
-              
-              else if (data.type === 'thinking' && data.content) {
-                setMessages(prev => {
-                  const newMessages = [...prev];
-                  const currentThinking = newMessages[assistantMessageIndex].thinking || '';
-                  newMessages[assistantMessageIndex] = {
-                    ...newMessages[assistantMessageIndex],
-                    thinking: currentThinking + data.content,
-                    showThinking: true,
-                    isThinking: true
-                  };
-                  return newMessages;
-                });
-              }
-              
-              else if (data.type === 'thinking_end') {
-                setMessages(prev => {
-                  const newMessages = [...prev];
-                  newMessages[assistantMessageIndex] = {
-                    ...newMessages[assistantMessageIndex],
-                    isThinking: false,
-                    showThinking: false // Hide thinking box when answer starts
-                  };
-                  return newMessages;
-                });
-              }
-              
-              else if (data.type === 'answer_start') {
-                // Just a signal, state already updated in thinking_end
-              }
-              
-              else if (data.type === 'answer' && data.content) {
-                setMessages(prev => {
-                  const newMessages = [...prev];
-                  newMessages[assistantMessageIndex] = {
-                    ...newMessages[assistantMessageIndex],
-                    content: newMessages[assistantMessageIndex].content + data.content,
-                    showThinking: false // Ensure thinking is hidden during answer
-                  };
-                  return newMessages;
-                });
-              }
-              
-              else if (data.type === 'done') {
+              setConversations(prev => 
+                prev.map(c => {
+                  if (c.id !== currentConversationId) return c;
+                  
+                  const newMessages = [...c.messages];
+                  const currentMsg = newMessages[assistantMessageIndex];
+
+                  if (data.type === 'thinking_start') {
+                    newMessages[assistantMessageIndex] = {
+                      ...currentMsg,
+                      isThinking: true,
+                      showThinking: true,
+                      thinking: ''
+                    };
+                  } else if (data.type === 'thinking' && data.content) {
+                    newMessages[assistantMessageIndex] = {
+                      ...currentMsg,
+                      thinking: (currentMsg.thinking || '') + data.content,
+                      showThinking: true,
+                      isThinking: true
+                    };
+                  } else if (data.type === 'thinking_end') {
+                    newMessages[assistantMessageIndex] = {
+                      ...currentMsg,
+                      isThinking: false,
+                      showThinking: false
+                    };
+                  } else if (data.type === 'answer' && data.content) {
+                    newMessages[assistantMessageIndex] = {
+                      ...currentMsg,
+                      content: currentMsg.content + data.content,
+                      showThinking: false
+                    };
+                  }
+
+                  return { ...c, messages: newMessages };
+                })
+              );
+
+              if (data.type === 'done') {
                 setIsLoading(false);
               }
             } catch (e) {
@@ -209,15 +297,18 @@ export default function ChatApp() {
         console.log('Generation stopped by user');
       } else {
         console.error('Error:', error);
-        setMessages(prev => {
-          const newMessages = [...prev];
-          newMessages[assistantMessageIndex] = {
-            role: 'assistant',
-            content: 'Sorry, there was an error processing your request.',
-            showThinking: false
-          };
-          return newMessages;
-        });
+        setConversations(prev => 
+          prev.map(c => {
+            if (c.id !== currentConversationId) return c;
+            const newMessages = [...c.messages];
+            newMessages[assistantMessageIndex] = {
+              role: 'assistant',
+              content: 'Sorry, there was an error processing your request.',
+              showThinking: false
+            };
+            return { ...c, messages: newMessages };
+          })
+        );
       }
     } finally {
       setIsLoading(false);
@@ -235,482 +326,578 @@ export default function ChatApp() {
   };
 
   return (
-    <Box 
-      sx={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        height: '100vh',
-        bgcolor: '#212121',
-        position: 'relative'
-      }}
-    >
-      {/* Messages Container */}
-      <Box 
-        ref={messagesContainerRef}
-        onScroll={handleScroll}
-        sx={{ 
-          flex: 1, 
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          bgcolor: '#212121',
-          scrollBehavior: 'smooth'
+    <Box sx={{ display: 'flex', height: '100vh', bgcolor: '#212121' }}>
+      {/* Sidebar */}
+      <Drawer
+        variant="persistent"
+        anchor="left"
+        open={sidebarOpen}
+        sx={{
+          width: 260,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width: 260,
+            bgcolor: '#171717',
+            borderRight: '1px solid #2f2f2f',
+            boxSizing: 'border-box',
+          },
         }}
       >
-        {messages.length === 0 && (
-          <Box sx={{ maxWidth: '768px', mx: 'auto', width: '100%', px: 4 }}>
-            <Box 
-              sx={{ 
-                minHeight: '70vh',
-                display: 'flex', 
-                flexDirection: 'column',
-                alignItems: 'center', 
-                justifyContent: 'center',
-                color: 'text.secondary'
-              }}
-            >
-              <Box
-                sx={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: '12px',
-                  bgcolor: '#2f2f2f',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 4
-                }}
-              >
-                <BotIcon sx={{ fontSize: 32, color: '#ececec' }} />
-              </Box>
-              <Typography 
-                variant="h4" 
-                gutterBottom 
-                sx={{ 
-                  fontWeight: 500,
-                  color: '#ececec',
-                  mb: 1
-                }}
-              >
-                How can I help you today?
-              </Typography>
-            </Box>
-          </Box>
-        )}
-
-        {messages.map((msg, idx) => (
-          <Fade in={true} key={idx} timeout={200}>
-            <Box
-              sx={{
-                width: '100%',
-                bgcolor: msg.role === 'user' ? 'transparent' : '#2f2f2f',
-                py: 4
-              }}
-            >
-              <Box sx={{ maxWidth: '768px', mx: 'auto', width: '100%', px: 4 }}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    gap: 3,
-                    alignItems: 'flex-start'
-                  }}
-                >
-                  <Avatar
-                    sx={{
-                      width: 32,
-                      height: 32,
-                      bgcolor: msg.role === 'user' ? '#19c37d' : '#19c37d',
-                      flexShrink: 0
-                    }}
-                  >
-                    {msg.role === 'user' ? (
-                      <PersonIcon sx={{ fontSize: 20 }} />
-                    ) : (
-                      <BotIcon sx={{ fontSize: 20 }} />
-                    )}
-                  </Avatar>
-                  
-                  <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
-                    {/* User files display */}
-                    {msg.files && msg.files.length > 0 && (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                        {msg.files.map((file, fileIdx) => (
-                          <Box
-                            key={fileIdx}
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1,
-                              bgcolor: '#2f2f2f',
-                              borderRadius: '16px',
-                              px: 2,
-                              py: 1,
-                              border: '1px solid #424242'
-                            }}
-                          >
-                            <AttachFileIcon sx={{ fontSize: 14, color: '#19c37d' }} />
-                            <Typography variant="body2" sx={{ color: '#ececec', fontSize: '12px' }}>
-                              {file.name}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    )}
-
-                    {/* Thinking Section - Only shown until answer starts */}
-                    <Collapse in={msg.showThinking} timeout={300}>
-                      <Paper
-                        elevation={0}
-                        sx={{
-                          bgcolor: '#1a1a1a',
-                          border: '1px solid #3a3a3a',
-                          borderRadius: 2,
-                          p: 2.5,
-                          mb: 3
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                          <ThinkingIcon 
-                            sx={{ 
-                              fontSize: 20, 
-                              color: '#19c37d',
-                              animation: msg.isThinking ? 'spin 2s linear infinite' : 'none',
-                              '@keyframes spin': {
-                                '0%': { transform: 'rotate(0deg)' },
-                                '100%': { transform: 'rotate(360deg)' }
-                              }
-                            }} 
-                          />
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
-                              color: '#19c37d',
-                              fontWeight: 600,
-                              fontSize: '14px',
-                              letterSpacing: '0.3px'
-                            }}
-                          >
-                            Thinking...
-                          </Typography>
-                        </Box>
-                        
-                        <Box
-                          sx={{
-                            minHeight: '40px',
-                            display: 'flex',
-                            alignItems: msg.thinking ? 'flex-start' : 'center'
-                          }}
-                        >
-                          {msg.thinking ? (
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                whiteSpace: 'pre-wrap',
-                                color: '#b8b8b8',
-                                fontSize: '14px',
-                                lineHeight: 1.8,
-                                fontFamily: '"SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace',
-                                wordBreak: 'break-word'
-                              }}
-                            >
-                              {msg.thinking}
-                            </Typography>
-                          ) : (
-                            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                              <Box
-                                sx={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: '50%',
-                                  bgcolor: '#19c37d',
-                                  animation: 'pulse 1.4s ease-in-out infinite',
-                                  '@keyframes pulse': {
-                                    '0%, 100%': { opacity: 0.2, transform: 'scale(0.8)' },
-                                    '50%': { opacity: 1, transform: 'scale(1.2)' }
-                                  }
-                                }}
-                              />
-                              <Box
-                                sx={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: '50%',
-                                  bgcolor: '#19c37d',
-                                  animation: 'pulse 1.4s ease-in-out 0.2s infinite',
-                                  '@keyframes pulse': {
-                                    '0%, 100%': { opacity: 0.2, transform: 'scale(0.8)' },
-                                    '50%': { opacity: 1, transform: 'scale(1.2)' }
-                                  }
-                                }}
-                              />
-                              <Box
-                                sx={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: '50%',
-                                  bgcolor: '#19c37d',
-                                  animation: 'pulse 1.4s ease-in-out 0.4s infinite',
-                                  '@keyframes pulse': {
-                                    '0%, 100%': { opacity: 0.2, transform: 'scale(0.8)' },
-                                    '50%': { opacity: 1, transform: 'scale(1.2)' }
-                                  }
-                                }}
-                              />
-                            </Box>
-                          )}
-                        </Box>
-                      </Paper>
-                    </Collapse>
-                    
-                    {/* Answer Section */}
-                    <Typography 
-                      variant="body1" 
-                      sx={{ 
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        color: '#ececec',
-                        fontSize: '16px',
-                        lineHeight: 1.75,
-                        fontWeight: 400
-                      }}
-                    >
-                      {msg.content || (
-                        !msg.showThinking && (
-                          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', py: 1 }}>
-                            <Box
-                              sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                bgcolor: '#ececec',
-                                animation: 'pulse 1.4s ease-in-out infinite',
-                                '@keyframes pulse': {
-                                  '0%, 100%': { opacity: 0.2, transform: 'scale(0.8)' },
-                                  '50%': { opacity: 1, transform: 'scale(1.2)' }
-                                }
-                              }}
-                            />
-                            <Box
-                              sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                bgcolor: '#ececec',
-                                animation: 'pulse 1.4s ease-in-out 0.2s infinite',
-                                '@keyframes pulse': {
-                                  '0%, 100%': { opacity: 0.2, transform: 'scale(0.8)' },
-                                  '50%': { opacity: 1, transform: 'scale(1.2)' }
-                                }
-                              }}
-                            />
-                            <Box
-                              sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                bgcolor: '#ececec',
-                                animation: 'pulse 1.4s ease-in-out 0.4s infinite',
-                                '@keyframes pulse': {
-                                  '0%, 100%': { opacity: 0.2, transform: 'scale(0.8)' },
-                                  '50%': { opacity: 1, transform: 'scale(1.2)' }
-                                }
-                              }}
-                            />
-                          </Box>
-                        )
-                      )}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Box>
-          </Fade>
-        ))}
-
-        <div ref={messagesEndRef} />
-      </Box>
-
-      {/* Input Area */}
-      <Box 
-        sx={{ 
-          bgcolor: '#212121',
-          py: 4,
-          borderTop: '1px solid #424242'
-        }}
-      >
-        <Box sx={{ maxWidth: '768px', mx: 'auto', width: '100%', px: 4 }}>
-          {/* File preview chips */}
-          {selectedFiles.length > 0 && (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-              {selectedFiles.map((file, index) => (
-                <Box
-                  key={index}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    bgcolor: '#2f2f2f',
-                    borderRadius: '16px',
-                    px: 2,
-                    py: 1,
-                    border: '1px solid #424242'
-                  }}
-                >
-                  <AttachFileIcon sx={{ fontSize: 16, color: '#19c37d' }} />
-                  <Typography variant="body2" sx={{ color: '#ececec', fontSize: '13px' }}>
-                    {file.name}
-                  </Typography>
-                  <IconButton
-                    size="small"
-                    onClick={() => removeFile(index)}
-                    sx={{ 
-                      width: 20, 
-                      height: 20,
-                      minWidth: 20,
-                      minHeight: 20,
-                      padding: 0,
-                      color: '#8e8e8e',
-                      '&:hover': { 
-                        color: '#ececec',
-                        bgcolor: 'transparent'
-                      }
-                    }}
-                  >
-                    <CloseIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Box>
-              ))}
-            </Box>
-          )}
-
-          <Box 
-            sx={{ 
-              display: 'flex', 
-              gap: 2,
-              alignItems: 'flex-end',
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <IconButton
+            onClick={createNewChat}
+            sx={{
               bgcolor: '#2f2f2f',
-              borderRadius: '26px',
-              px: 2,
-              py: 1.5,
-              transition: 'all 0.2s ease',
-              border: '1px solid transparent',
-              '&:focus-within': {
-                bgcolor: '#353535',
-                borderColor: '#565656'
+              color: '#ececec',
+              borderRadius: '8px',
+              mb: 2,
+              '&:hover': {
+                bgcolor: '#3f3f3f'
               }
             }}
           >
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={handleFileSelect}
-              style={{ display: 'none' }}
-              accept="image/*,.pdf,.doc,.docx,.txt"
-            />
-            
-            {/* File upload button */}
-            <IconButton
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading}
-              sx={{
-                color: '#8e8e8e',
-                width: 32,
-                height: 32,
-                '&:hover': {
-                  color: '#ececec',
-                  bgcolor: 'transparent'
-                },
-                '&.Mui-disabled': {
-                  color: '#4e4e4e'
-                },
-                flexShrink: 0
+            <AddIcon sx={{ mr: 1 }} />
+            <Typography variant="body2" sx={{ flex: 1, textAlign: 'left' }}>
+              New chat
+            </Typography>
+          </IconButton>
+
+          <List sx={{ flex: 1, overflowY: 'auto', px: 0 }}>
+            {conversations.map((conv) => (
+              <ListItem key={conv.id} disablePadding sx={{ mb: 0.5 }}>
+                {editingId === conv.id ? (
+                  <Box sx={{ width: '100%', px: 1 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onBlur={() => saveTitle(conv.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveTitle(conv.id);
+                        if (e.key === 'Escape') setEditingId(null);
+                      }}
+                      autoFocus
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          color: '#ececec',
+                          bgcolor: '#2f2f2f',
+                          fontSize: '14px'
+                        }
+                      }}
+                    />
+                  </Box>
+                ) : (
+                  <ListItemButton
+                    selected={conv.id === currentConversationId}
+                    onClick={() => setCurrentConversationId(conv.id)}
+                    sx={{
+                      borderRadius: '8px',
+                      color: '#ececec',
+                      '&.Mui-selected': {
+                        bgcolor: '#2f2f2f',
+                      },
+                      '&:hover': {
+                        bgcolor: '#2a2a2a'
+                      },
+                      display: 'flex',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <ListItemText 
+                      primary={conv.title}
+                      primaryTypographyProps={{
+                        sx: { 
+                          fontSize: '14px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }
+                      }}
+                    />
+                    <IconButton
+                      size="small"
+                      onClick={(e) => handleMenuOpen(e, conv.id)}
+                      sx={{ 
+                        color: '#8e8e8e',
+                        opacity: 0,
+                        '.MuiListItemButton-root:hover &': {
+                          opacity: 1
+                        }
+                      }}
+                    >
+                      <MoreVertIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  </ListItemButton>
+                )}
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      </Drawer>
+
+      {/* Context Menu */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={handleMenuClose}
+        PaperProps={{
+          sx: {
+            bgcolor: '#2f2f2f',
+            color: '#ececec'
+          }
+        }}
+      >
+        <MenuItem onClick={() => {
+          const conv = conversations.find(c => c.id === selectedConvId);
+          if (conv) startEditTitle(conv);
+        }}>
+          <EditIcon sx={{ mr: 1, fontSize: 18 }} />
+          Rename
+        </MenuItem>
+        <MenuItem onClick={() => deleteConversation(selectedConvId)}>
+          <DeleteIcon sx={{ mr: 1, fontSize: 18 }} />
+          Delete
+        </MenuItem>
+      </Menu>
+
+      {/* Main Chat Area */}
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          flex: 1,
+          position: 'relative',
+          ml: sidebarOpen ? 0 : 0,
+          transition: 'margin 0.3s'
+        }}
+      >
+        {/* Header */}
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            p: 2, 
+            borderBottom: '1px solid #2f2f2f',
+            bgcolor: '#212121'
+          }}
+        >
+          <IconButton
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            sx={{ color: '#ececec', mr: 2 }}
+          >
+            <MenuIcon />
+          </IconButton>
+          <Typography variant="h6" sx={{ color: '#ececec', fontWeight: 500 }}>
+            {currentConversation?.title || 'Chat'}
+          </Typography>
+        </Box>
+
+        {/* Messages Container */}
+        <Box 
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          sx={{ 
+            flex: 1, 
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: '#212121',
+            scrollBehavior: 'smooth'
+          }}
+        >
+          {messages.length === 0 && (
+            <Box sx={{ maxWidth: '768px', mx: 'auto', width: '100%', px: 4 }}>
+              <Box 
+                sx={{ 
+                  minHeight: '70vh',
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  color: 'text.secondary'
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: '12px',
+                    bgcolor: '#2f2f2f',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mb: 4
+                  }}
+                >
+                  <BotIcon sx={{ fontSize: 32, color: '#ececec' }} />
+                </Box>
+                <Typography 
+                  variant="h4" 
+                  gutterBottom 
+                  sx={{ 
+                    fontWeight: 500,
+                    color: '#ececec',
+                    mb: 1
+                  }}
+                >
+                  How can I help you today?
+                </Typography>
+              </Box>
+            </Box>
+          )}
+
+          {messages.map((msg, idx) => (
+            <Fade in={true} key={idx} timeout={200}>
+              <Box
+                sx={{
+                  width: '100%',
+                  bgcolor: msg.role === 'user' ? 'transparent' : '#2f2f2f',
+                  py: 4
+                }}
+              >
+                <Box sx={{ maxWidth: '768px', mx: 'auto', width: '100%', px: 4 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: 3,
+                      alignItems: 'flex-start'
+                    }}
+                  >
+                    <Avatar
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        bgcolor: '#19c37d',
+                        flexShrink: 0
+                      }}
+                    >
+                      {msg.role === 'user' ? (
+                        <PersonIcon sx={{ fontSize: 20 }} />
+                      ) : (
+                        <BotIcon sx={{ fontSize: 20 }} />
+                      )}
+                    </Avatar>
+                    
+                    <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
+                      {msg.files && msg.files.length > 0 && (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                          {msg.files.map((file, fileIdx) => (
+                            <Box
+                              key={fileIdx}
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                bgcolor: '#2f2f2f',
+                                borderRadius: '16px',
+                                px: 2,
+                                py: 1,
+                                border: '1px solid #424242'
+                              }}
+                            >
+                              <AttachFileIcon sx={{ fontSize: 14, color: '#19c37d' }} />
+                              <Typography variant="body2" sx={{ color: '#ececec', fontSize: '12px' }}>
+                                {file.name}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      )}
+
+                      <Collapse in={msg.showThinking} timeout={300}>
+                        <Paper
+                          elevation={0}
+                          sx={{
+                            bgcolor: '#1a1a1a',
+                            border: '1px solid #3a3a3a',
+                            borderRadius: 2,
+                            p: 2.5,
+                            mb: 3
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                            <ThinkingIcon 
+                              sx={{ 
+                                fontSize: 20, 
+                                color: '#19c37d',
+                                animation: msg.isThinking ? 'spin 2s linear infinite' : 'none',
+                                '@keyframes spin': {
+                                  '0%': { transform: 'rotate(0deg)' },
+                                  '100%': { transform: 'rotate(360deg)' }
+                                }
+                              }} 
+                            />
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                color: '#19c37d',
+                                fontWeight: 600,
+                                fontSize: '14px',
+                                letterSpacing: '0.3px'
+                              }}
+                            >
+                              Thinking...
+                            </Typography>
+                          </Box>
+                          
+                          <Box
+                            sx={{
+                              minHeight: '40px',
+                              display: 'flex',
+                              alignItems: msg.thinking ? 'flex-start' : 'center'
+                            }}
+                          >
+                            {msg.thinking ? (
+                              <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                  whiteSpace: 'pre-wrap',
+                                  color: '#b8b8b8',
+                                  fontSize: '14px',
+                                  lineHeight: 1.8,
+                                  fontFamily: '"SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace',
+                                  wordBreak: 'break-word'
+                                }}
+                              >
+                                {msg.thinking}
+                              </Typography>
+                            ) : (
+                              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                                {[0, 0.2, 0.4].map((delay, i) => (
+                                  <Box
+                                    key={i}
+                                    sx={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: '50%',
+                                      bgcolor: '#19c37d',
+                                      animation: `pulse 1.4s ease-in-out ${delay}s infinite`,
+                                      '@keyframes pulse': {
+                                        '0%, 100%': { opacity: 0.2, transform: 'scale(0.8)' },
+                                        '50%': { opacity: 1, transform: 'scale(1.2)' }
+                                      }
+                                    }}
+                                  />
+                                ))}
+                              </Box>
+                            )}
+                          </Box>
+                        </Paper>
+                      </Collapse>
+                      
+                      <Typography 
+                        variant="body1" 
+                        sx={{ 
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          color: '#ececec',
+                          fontSize: '16px',
+                          lineHeight: 1.75,
+                          fontWeight: 400
+                        }}
+                      >
+                        {msg.content || (
+                          !msg.showThinking && (
+                            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', py: 1 }}>
+                              {[0, 0.2, 0.4].map((delay, i) => (
+                                <Box
+                                  key={i}
+                                  sx={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    bgcolor: '#ececec',
+                                    animation: `pulse 1.4s ease-in-out ${delay}s infinite`,
+                                    '@keyframes pulse': {
+                                      '0%, 100%': { opacity: 0.2, transform: 'scale(0.8)' },
+                                      '50%': { opacity: 1, transform: 'scale(1.2)' }
+                                    }
+                                  }}
+                                />
+                              ))}
+                            </Box>
+                          )
+                        )}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </Box>
+            </Fade>
+          ))}
+
+          <div ref={messagesEndRef} />
+        </Box>
+
+        {/* Input Area */}
+        <Box 
+          sx={{ 
+            bgcolor: '#212121',
+            py: 4,
+            borderTop: '1px solid #424242'
+          }}
+        >
+          <Box sx={{ maxWidth: '768px', mx: 'auto', width: '100%', px: 4 }}>
+            {selectedFiles.length > 0 && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                {selectedFiles.map((file, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      bgcolor: '#2f2f2f',
+                      borderRadius: '16px',
+                      px: 2,
+                      py: 1,
+                      border: '1px solid #424242'
+                    }}
+                  >
+                    <AttachFileIcon sx={{ fontSize: 16, color: '#19c37d' }} />
+                    <Typography variant="body2" sx={{ color: '#ececec', fontSize: '13px' }}>
+                      {file.name}
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      onClick={() => removeFile(index)}
+                      sx={{ 
+                        width: 20, 
+                        height: 20,
+                        minWidth: 20,
+                        minHeight: 20,
+                        padding: 0,
+                        color: '#8e8e8e',
+                        '&:hover': { 
+                          color: '#ececec',
+                          bgcolor: 'transparent'
+                        }
+                      }}
+                    >
+                      <CloseIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                gap: 2,
+                alignItems: 'flex-end',
+                bgcolor: '#2f2f2f',
+                borderRadius: '26px',
+                px: 2,
+                py: 1.5,
+                transition: 'all 0.2s ease',
+                border: '1px solid transparent',
+                '&:focus-within': {
+                  bgcolor: '#353535',
+                  borderColor: '#565656'
+                }
               }}
             >
-              <AttachFileIcon sx={{ fontSize: 20 }} />
-            </IconButton>
-
-            <TextField
-              inputRef={inputRef}
-              fullWidth
-              multiline
-              maxRows={6}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder="Message ChatGPT"
-              disabled={isLoading}
-              variant="standard"
-              InputProps={{
-                disableUnderline: true,
-                sx: {
-                  fontSize: '16px',
-                  lineHeight: 1.5,
-                  color: '#ececec',
-                  py: 0.5
-                }
-              }}
-              sx={{
-                '& .MuiInputBase-input': {
-                  '&::placeholder': {
-                    color: '#8e8e8e',
-                    opacity: 1
-                  }
-                }
-              }}
-            />
-            {isLoading ? (
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+                accept="image/*,.pdf,.doc,.docx,.txt"
+              />
+              
               <IconButton
-                onClick={stopGeneration}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading}
                 sx={{
-                  bgcolor: '#ececec',
-                  color: '#212121',
+                  color: '#8e8e8e',
                   width: 32,
                   height: 32,
                   '&:hover': {
-                    bgcolor: '#d0d0d0'
-                  },
-                  flexShrink: 0
-                }}
-              >
-                <StopIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            ) : (
-              <IconButton
-                onClick={handleSubmit}
-                disabled={!input.trim() && selectedFiles.length === 0}
-                sx={{
-                  bgcolor: (input.trim() || selectedFiles.length > 0) ? '#ececec' : 'transparent',
-                  color: (input.trim() || selectedFiles.length > 0) ? '#212121' : '#676767',
-                  width: 32,
-                  height: 32,
-                  '&:hover': {
-                    bgcolor: (input.trim() || selectedFiles.length > 0) ? '#d0d0d0' : 'transparent'
+                    color: '#ececec',
+                    bgcolor: 'transparent'
                   },
                   '&.Mui-disabled': {
-                    bgcolor: 'transparent',
-                    color: '#676767'
+                    color: '#4e4e4e'
                   },
-                  transition: 'all 0.2s ease',
                   flexShrink: 0
                 }}
               >
-                <SendIcon sx={{ fontSize: 18 }} />
+                <AttachFileIcon sx={{ fontSize: 20 }} />
               </IconButton>
-            )}
+
+              <TextField
+                inputRef={inputRef}
+                fullWidth
+                multiline
+                maxRows={6}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="Message ChatGPT"
+                disabled={isLoading}
+                variant="standard"
+                InputProps={{
+                  disableUnderline: true,
+                  sx: {
+                    fontSize: '16px',
+                    lineHeight: 1.5,
+                    color: '#ececec',
+                    py: 0.5
+                  }
+                }}
+                sx={{
+                  '& .MuiInputBase-input': {
+                    '&::placeholder': {
+                      color: '#8e8e8e',
+                      opacity: 1
+                    }
+                  }
+                }}
+              />
+              {isLoading ? (
+                <IconButton
+                  onClick={stopGeneration}
+                  sx={{
+                    bgcolor: '#ececec',
+                    color: '#212121',
+                    width: 32,
+                    height: 32,
+                    '&:hover': {
+                      bgcolor: '#d0d0d0'
+                    },
+                    flexShrink: 0
+                  }}
+                >
+                  <StopIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              ) : (
+                <IconButton
+                  onClick={handleSubmit}
+                  disabled={!input.trim() && selectedFiles.length === 0}
+                  sx={{
+                    bgcolor: (input.trim() || selectedFiles.length > 0) ? '#ececec' : 'transparent',
+                    color: (input.trim() || selectedFiles.length > 0) ? '#212121' : '#676767',
+                    width: 32,
+                    height: 32,
+                    '&:hover': {
+                      bgcolor: (input.trim() || selectedFiles.length > 0) ? '#d0d0d0' : 'transparent'
+                    },
+                    '&.Mui-disabled': {
+                      bgcolor: 'transparent',
+                      color: '#676767'
+                    },
+                    transition: 'all 0.2s ease',
+                    flexShrink: 0
+                  }}
+                >
+                  <SendIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              )}
+            </Box>
           </Box>
-          <Typography 
-            variant="caption" 
-            sx={{ 
-              display: 'block',
-              textAlign: 'center',
-              color: '#8e8e8e',
-              mt: 2,
-              fontSize: '12px'
-            }}
-          >
-          </Typography>
         </Box>
       </Box>
     </Box>

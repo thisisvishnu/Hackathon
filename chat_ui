@@ -217,7 +217,7 @@ export default function ChatApp() {
         formData.append('files', file);
       });
 
-      const response = await fetch('http://localhost:8000/chat', {
+      const response = await fetch('http://localhost:8002/chat', {
         method: 'POST',
         body: formData,
       });

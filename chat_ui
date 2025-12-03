@@ -200,7 +200,8 @@ export default function ChatApp() {
       content: '',
       thinking: '',
       isThinking: false,
-      showThinking: false
+      showThinking: false,
+      links: []
     };
 
     setConversations(prev => 
@@ -275,7 +276,13 @@ export default function ChatApp() {
                     newMessages[assistantMessageIndex] = {
                       ...currentMsg,
                       content: currentMsg.content + data.content,
-                      showThinking: false
+                      showThinking: true
+                    };
+                  }
+                  else if (data.type === 'links' && data.links) {
+                    newMessages[assistantMessageIndex] = {
+                      ...currentMsg,
+                      links: data.links
                     };
                   }
 
@@ -663,7 +670,7 @@ export default function ChatApp() {
                                 {msg.thinking}
                               </Typography>
                             ) : (
-                              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                                 {[0, 0.2, 0.4].map((delay, i) => (
                                   <Box
                                     key={i}
@@ -677,6 +684,7 @@ export default function ChatApp() {
                                         '0%, 100%': { opacity: 0.2, transform: 'scale(0.8)' },
                                         '50%': { opacity: 1, transform: 'scale(1.2)' }
                                       }
+                                      
                                     }}
                                   />
                                 ))}
@@ -699,7 +707,7 @@ export default function ChatApp() {
                       >
                         {msg.content || (
                           !msg.showThinking && (
-                            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', py: 1 }}>
+                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', py: 1 }}>
                               {[0, 0.2, 0.4].map((delay, i) => (
                                 <Box
                                   key={i}
@@ -717,9 +725,36 @@ export default function ChatApp() {
                                 />
                               ))}
                             </Box>
+                            
                           )
                         )}
                       </Typography>
+                      {msg.links && msg.links.length > 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle2" sx={{ color: '#19c37d', mb: 1 }}>
+                          Useful Links
+                        </Typography>
+
+                        {msg.links.map((link, i) => (
+                          <Box key={i} sx={{ mb: 1 }}>
+                            <a
+                              href={link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: '#81c784', fontWeight: 'bold' }}
+                            >
+                              {link.title}
+                            </a>
+                            {link.description && (
+                              <Typography variant="body2" sx={{ color: '#bdbdbd' }}>
+                                {link.description}
+                              </Typography>
+                            )}
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
+
                     </Box>
                   </Box>
                 </Box>
@@ -729,6 +764,8 @@ export default function ChatApp() {
 
           <div ref={messagesEndRef} />
         </Box>
+
+        
 
         {/* Input Area */}
         <Box 

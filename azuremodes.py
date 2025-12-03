@@ -25,7 +25,7 @@ http_client = httpx.Client(verify=False)
 async_http_client = httpx.AsyncClient(verify=False)
 
 # Set your Azure OpenAI credentials
-os.environ["AZURE_OPENAI_API_KEY"] = "sk-KVetPf7B85zhUGicPW8mrQ"
+os.environ["AZURE_OPENAI_API_KEY"] = "sk-***"
 os.environ["AZURE_OPENAI_ENDPOINT"] = "https://genailab.tcs.in"
 
 # Disable SSL warnings

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END, MessagesState
 from azureModels import llm
 import json
@@ -12,6 +12,7 @@ import base64
 from pathlib import Path
 from io import BytesIO
 import PyPDF2
+import re
 
 app = FastAPI()
 
@@ -40,6 +41,45 @@ builder.add_node("agent", call_model)
 builder.add_edge(START, "agent")
 builder.add_conditional_edges("agent", route, {END: END})
 graph = builder.compile()
+
+# ---------------------------------------------------------
+# Link extraction function
+# ---------------------------------------------------------
+# ---------------------------------------------------------
+# Simulated Useful Links (no LLM)
+# ---------------------------------------------------------
+async def extract_useful_links(response_text: str, user_query: str) -> List[dict]:
+    """
+    Return 5 simulated useful links instead of asking an LLM.
+    """
+    return [
+        {
+            "title": "OpenAI Documentation",
+            "url": "https://platform.openai.com/docs",
+            "description": "Official OpenAI API documentation and usage examples."
+        },
+        {
+            "title": "FastAPI Tutorial",
+            "url": "https://fastapi.tiangolo.com/learn/",
+            "description": "Learn how to build APIs using FastAPI."
+        },
+        {
+            "title": "React Documentation",
+            "url": "https://react.dev/",
+            "description": "Official React documentation with guides and examples."
+        },
+        {
+            "title": "MDN Web Docs – JavaScript Guide",
+            "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+            "description": "Comprehensive JavaScript reference and tutorials."
+        },
+        {
+            "title": "Python AsyncIO Guide",
+            "url": "https://docs.python.org/3/library/asyncio.html",
+            "description": "Official Python guide to asynchronous programming."
+        }
+    ]
+
 
 # ---------------------------------------------------------
 # Thinking simulation
@@ -205,14 +245,24 @@ async def chat(
         yield f"data: {json.dumps({'type': 'thinking_end'})}\n\n"
         yield f"data: {json.dumps({'type': 'answer_start'})}\n\n"
 
+        # Collect the response text for link generation
+        full_response = ""
+
         # Actual model output
         async for event in graph.astream_events({"messages": [human_message]}, version="v2"):
             if event.get("event") == "on_chat_model_stream":
                 chunk = event["data"]["chunk"]
                 text = chunk.content if hasattr(chunk, "content") else ""
                 if text:
+                    full_response += text
                     yield f"data: {json.dumps({'type': 'answer', 'content': text})}\n\n"
                     await asyncio.sleep(0.02)
+
+        # Generate useful links based on the response
+        links = await extract_useful_links(full_response, message)
+        
+        if links:
+            yield f"data: {json.dumps({'type': 'links', 'links': links})}\n\n"
 
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 

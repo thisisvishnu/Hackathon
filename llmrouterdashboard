@@ -1,0 +1,107 @@
+import streamlit as st
+import json
+import pandas as pd
+import plotly.express as px
+
+LOG_FILE = "router_logs.json"
+
+st.set_page_config(page_title="LLM Router Admin Dashboard", layout="wide")
+
+st.title("🔍 LLM Router Admin Dashboard")
+st.write("Monitor model usage, cost, latency, and routing performance.")
+
+# --------------------------------------------
+# Load logs
+# --------------------------------------------
+def load_logs():
+    rows = []
+    with open(LOG_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            row = json.loads(line)
+            if row.get("event") == "final_answer":
+                rows.append(row)
+    return pd.DataFrame(rows)
+
+df = load_logs()
+
+if df.empty:
+    st.warning("No logs found.")
+    st.stop()
+
+# Convert to proper dtypes
+df["timestamp"] = pd.to_datetime(df["timestamp"])
+df["cost"] = df["cost"].astype(float)
+df["latency_ms"] = df["latency_ms"].astype(float)
+
+# ==============================
+# METRIC CARDS
+# ==============================
+total_cost = df["cost"].sum()
+avg_latency = df["latency_ms"].mean()
+total_queries = len(df)
+
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Queries", total_queries)
+col2.metric("Total Cost ($)", f"{total_cost:.6f}")
+col3.metric("Avg Latency (ms)", f"{avg_latency:.1f}")
+
+# ==============================
+# COST SAVINGS SIMULATION
+# ==============================
+
+# Assume "highest model" = GPT-4o
+HIGHEST_MODEL = "azure/genailab-maas-gpt-4o"
+MODEL_CARD_PATH = "model_cards.json"
+
+model_cards = json.load(open(MODEL_CARD_PATH))
+
+def get_pricing(model):
+    for m in model_cards["models"]:
+        if m["name"] == model:
+            return m["pricing"]
+    return None
+
+
+pricing_4o = get_pricing(HIGHEST_MODEL)
+
+def compute_cost_4o(row):
+    cost_in = (row["tokens_in"] / 1000) * pricing_4o["input_per_1k"]
+    cost_out = (row["tokens_out"] / 1000) * pricing_4o["output_per_1k"]
+    return cost_in + cost_out
+
+df["cost_if_4o"] = df.apply(compute_cost_4o, axis=1)
+df["savings"] = df["cost_if_4o"] - df["cost"]
+
+st.subheader("💰 Cost Savings Using Router vs Always Using GPT-4o")
+st.write(f"**Total Saved:** ${df['savings'].sum():.6f}")
+
+fig = px.bar(df, x="timestamp", y="savings", title="Savings Per Query")
+st.plotly_chart(fig, use_container_width=True)
+
+# ==============================
+# COST PER MODEL PIE CHART
+# ==============================
+st.subheader("📊 Cost Distribution by Model")
+
+cost_by_model = df.groupby("model")["cost"].sum().reset_index()
+fig = px.pie(cost_by_model, names="model", values="cost")
+st.plotly_chart(fig, use_container_width=True)
+
+# ==============================
+# LATENCY TREND
+# ==============================
+st.subheader("⏱️ Latency Over Time")
+
+fig = px.line(
+    df, x="timestamp", y="latency_ms", color="model",
+    log_y=True,
+    title="Latency Over Time (log scale)"
+)
+st.plotly_chart(fig, use_container_width=True)
+
+
+# ==============================
+# QUERY LOG TABLE
+# ==============================
+st.subheader("📄 Query Logs")
+st.dataframe(df[["timestamp", "query", "model", "cost", "latency_ms", "reason"]])

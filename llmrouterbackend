@@ -1,0 +1,320 @@
+# %%
+import json
+import httpx
+import hashlib
+import time
+from datetime import datetime
+from typing import TypedDict, Optional
+
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph
+import tiktoken
+
+
+API_KEY = "sk-G82PfMy-OCXOoxT5rHc0Ig"  
+BASE_URL = "https://genailab.tcs.in"
+LOG_FILE = "router_logs.json"
+
+client = httpx.Client(verify=False)
+
+class RouterState(TypedDict):
+    query: str
+    chosen_model: Optional[str]
+    reason: Optional[str]
+    answer: Optional[str]
+    latency_ms: Optional[float]
+    tokens_in: Optional[int]
+    tokens_out: Optional[int]
+    cost: Optional[float]
+
+with open("model_cards.json", "r", encoding="utf-8") as f:
+    model_cards = json.load(f)
+
+model_cards_str = json.dumps(model_cards, indent=2)
+
+def estimate_cost(model: str, tokens_in: int, tokens_out: int):
+    """Cost calculation using the pricing data in model_cards.json."""
+    for m in model_cards["models"]:
+        if m["name"] == model:
+            pr = m["pricing"]
+            return (tokens_in / 1000 * pr["input_per_1k"]) + (tokens_out / 1000 * pr["output_per_1k"])
+    return 0.0
+
+def count_tokens(text: str, model_name: str = "gpt-4o"):
+    try:
+        encoding = tiktoken.encoding_for_model(model_name)
+    except:
+        encoding = tiktoken.get_encoding("cl100k_base")
+    return len(encoding.encode(text))
+
+
+def log_event(data: dict):
+    data["timestamp"] = datetime.utcnow().isoformat()
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(data) + "\n")
+
+ROUTER_PROMPT = f"""
+You are ModelRouter.
+
+Select the BEST model for the user's query using cost, quality, and capabilities
+from the model catalog below:
+
+MODEL_CARDS_JSON:
+{model_cards_str}
+
+Respond ONLY in JSON:
+{{
+  "model": "<best_model_name>",
+  "reason": "<why this model is chosen>"
+}}
+"""
+
+router_llm = ChatOpenAI(
+    base_url=BASE_URL,
+    model="azure/genailab-maas-gpt-4o-mini",
+    api_key=API_KEY,
+    temperature=0,
+    http_client=client
+)
+
+
+def router_node(state: RouterState):
+    response = router_llm.invoke([
+        {"role": "system", "content": ROUTER_PROMPT},
+        {"role": "user", "content": state["query"]}
+    ])
+
+    raw = response.content
+    try:
+        data = json.loads(raw)
+    except:
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        data = json.loads(raw[start:end])
+
+    state["chosen_model"] = data["model"]
+    state["reason"] = data["reason"]
+
+    
+
+    return state
+
+def make_model_node(model_name: str):
+    def node(state: RouterState):
+
+        llm = ChatOpenAI(
+            base_url=BASE_URL,
+            model=model_name,
+            api_key=API_KEY,
+            http_client=client
+        )
+
+        prompt = state["query"]
+
+        start = time.time()
+        response = llm.invoke(prompt)
+        latency = (time.time() - start) * 1000
+
+        # compute tokens manually
+        tokens_in = count_tokens(prompt, model_name)
+        tokens_out = count_tokens(response.content, model_name)
+
+        # compute cost using model_cards.json
+        cost = estimate_cost(model_name, tokens_in, tokens_out)
+
+        state["answer"] = response.content
+        state["latency_ms"] = latency
+        state["tokens_in"] = tokens_in
+        state["tokens_out"] = tokens_out
+        state["cost"] = cost
+
+        return state
+    return node
+
+gpt35_node = make_model_node("azure/genailab-maas-gpt-35-turbo")
+gpt4o_mini_node = make_model_node("azure/genailab-maas-gpt-4o-mini")
+gpt4o_node = make_model_node("azure/genailab-maas-gpt-4o")
+deepseek_v3_node = make_model_node("azure_ai/genailab-maas-DeepSeek-V3-0324")
+deepseek_r1_node = make_model_node("azure_ai/genailab-maas-DeepSeek-R1")
+llama_90b_node = make_model_node("azure_ai/genailab-maas-Llama-3.2-90B-Vision-Instruct")
+llama_70b_node = make_model_node("azure_ai/genailab-maas-Llama-3.3-70B-Instruct")
+llama_maverick_node = make_model_node("azure_ai/genailab-maas-Llama-4-Maverick-17B-128E-Instruct-FP8")
+phi35_node = make_model_node("azure_ai/genailab-maas-Phi-3.5-vision-instruct")
+phi4_node = make_model_node("azure_ai/genailab-maas-Phi-4-reasoning")
+
+def router_branch(state: RouterState):
+    model = state["chosen_model"]
+
+    if "DeepSeek-V3" in model:
+        return "coding"
+    elif "DeepSeek-R1" in model:
+        return "reasoning"
+    elif "90B-Vision" in model:
+        return "vision90b"
+    elif "Phi-3.5" in model:
+        return "phi35"
+    elif "70B" in model:
+        return "llama70b"
+    elif "Maverick" in model:
+        return "maverick"
+    elif "gpt-4o-mini" in model:
+        return "gpt4omini"
+    elif "gpt-4o" in model:
+        return "gpt4o"
+    elif "gpt-35" in model:
+        return "gpt35"
+    elif "Phi-4" in model:
+        return "phi4"
+
+    return "gpt4o"
+
+def return_node(state: RouterState):
+    log_event({
+        "event": "final_answer",
+        "query": state["query"],
+        "model": state["chosen_model"],
+        "reason": state["reason"],
+        "latency_ms": state["latency_ms"],
+        "tokens_in": state["tokens_in"],
+        "tokens_out": state["tokens_out"],
+        "cost": state["cost"]
+    })
+    return state
+
+graph = StateGraph(RouterState)
+
+graph.add_node("router", router_node)
+graph.add_node("coding", deepseek_v3_node)
+graph.add_node("reasoning", deepseek_r1_node)
+graph.add_node("vision90b", llama_90b_node)
+graph.add_node("phi35", phi35_node)
+graph.add_node("llama70b", llama_70b_node)
+graph.add_node("maverick", llama_maverick_node)
+graph.add_node("gpt4omini", gpt4o_mini_node)
+graph.add_node("gpt4o", gpt4o_node)
+graph.add_node("gpt35", gpt35_node)
+graph.add_node("phi4", phi4_node)
+graph.add_node("return", return_node)
+
+graph.set_entry_point("router")
+graph.add_conditional_edges(
+    "router",
+    router_branch,
+    {
+        "coding": "coding",
+        "reasoning": "reasoning",
+        "vision90b": "vision90b",
+        "phi35": "phi35",
+        "llama70b": "llama70b",
+        "maverick": "maverick",
+        "gpt4omini": "gpt4omini",
+        "gpt4o": "gpt4o",
+        "gpt35": "gpt35",
+        "phi4": "phi4"
+    }
+)
+
+for m in ["coding","reasoning","vision90b","phi35","llama70b","maverick","gpt4omini","gpt4o","gpt35","phi4"]:
+    graph.add_edge(m, "return")
+
+app = graph.compile()
+
+if __name__ == "__main__":
+    query = "what is 2+2"
+    out = app.invoke({
+        "query": query,
+        "chosen_model": None,
+        "reason": None,
+        "answer": None,
+        "latency_ms": None,
+        "tokens_in": None,
+        "tokens_out": None,
+        "cost": None
+    })
+
+    print("\nModel:", out["chosen_model"])
+    print("Reason:", out["reason"])
+    print("Answer preview:", out["answer"], "...")
+    print("Cost:", out["cost"])
+
+if __name__ == "__main__":
+    query = "Explain segment tree with C++ code"
+    out = app.invoke({
+        "query": query,
+        "chosen_model": None,
+        "reason": None,
+        "answer": None,
+        "latency_ms": None,
+        "tokens_in": None,
+        "tokens_out": None,
+        "cost": None
+    })
+
+    print("\nModel:", out["chosen_model"])
+    print("Reason:", out["reason"])
+    print("Answer preview:", out["answer"], "...")
+    print("Cost:", out["cost"])
+
+if __name__ == "__main__":
+    query = "explain detaily about intergration and diffrentiation"
+    out = app.invoke({
+        "query": query,
+        "chosen_model": None,
+        "reason": None,
+        "answer": None,
+        "latency_ms": None,
+        "tokens_in": None,
+        "tokens_out": None,
+        "cost": None
+    })
+
+    print("\nModel:", out["chosen_model"])
+    print("Reason:", out["reason"])
+    print("Answer preview:", out["answer"], "...")
+    print("Cost:", out["cost"])
+
+if __name__ == "__main__":
+    query = "generate a picture of guy playing football"
+    out = app.invoke({
+        "query": query,
+        "chosen_model": None,
+        "reason": None,
+        "answer": None,
+        "latency_ms": None,
+        "tokens_in": None,
+        "tokens_out": None,
+        "cost": None
+    })
+
+    print("\nModel:", out["chosen_model"])
+    print("Reason:", out["reason"])
+    print("Answer preview:", out["answer"], "...")
+    print("Cost:", out["cost"])
+
+if __name__ == "__main__":
+    query = "what is tcs ai fridays"
+    out = app.invoke({
+        "query": query,
+        "chosen_model": None,
+        "reason": None,
+        "answer": None,
+        "latency_ms": None,
+        "tokens_in": None,
+        "tokens_out": None,
+        "cost": None
+    })
+
+    print("\nModel:", out["chosen_model"])
+    print("Reason:", out["reason"])
+    print("Answer preview:", out["answer"], "...")
+    print("Cost:", out["cost"])
+
+
+
+
+
+
+
+print(app.get_graph().draw_ascii())
+
+
